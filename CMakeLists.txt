@@ -23,10 +23,11 @@ find_package(FFTS REQUIRED)
 
 # Add the library target
 file(GLOB_RECURSE LIB_SOURCES "src/*.cpp")
-add_library(pitch_detection SHARED ${LIB_SOURCES})
+add_library(pitch_detection STATIC ${LIB_SOURCES})
 target_link_libraries(pitch_detection PUBLIC
     ${MLPACK_LIBRARIES}
     ${FFTS_LIBRARIES})
+target_include_directories(pitch_detection PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 find_package(gflags QUIET)
 find_package(libnyquist QUIET)
