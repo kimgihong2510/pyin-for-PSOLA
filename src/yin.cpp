@@ -3,6 +3,8 @@
 #include <complex>
 #include <map>
 #include <tuple>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #define YIN_THRESHOLD 0.20
@@ -135,7 +137,8 @@ pitch_alloc::Yin<T>::pitch(const std::vector<T> &audio_buffer, int sample_rate)
 }
 
 template <typename T>
-T
+template<bool check_voiced>
+std::conditional_t<check_voiced, std::pair<T, bool>, T>
 pitch_alloc::Yin<T>::probabilistic_pitch(
     const std::vector<T> &audio_buffer, int sample_rate)
 {
@@ -143,10 +146,19 @@ pitch_alloc::Yin<T>::probabilistic_pitch(
 
 	cumulative_mean_normalized_difference(this->yin_buffer);
 
-	auto f0_estimates = probabilistic_threshold(this->yin_buffer, sample_rate);
+	auto f0_estimates_float = probabilistic_threshold(this->yin_buffer, sample_rate);
 
 	this->clear();
-	return util::pitch_from_hmm(this->hmm, f0_estimates);
+
+	std::vector<std::pair<T, T>> f0_estimates;
+	f0_estimates.reserve(f0_estimates_float.size());
+	for (const auto& p : f0_estimates_float) {
+		f0_estimates.emplace_back(static_cast<T>(p.first), static_cast<T>(p.second));
+	}
+
+	const auto result = util::pitch_from_hmm<T, check_voiced>(this->hmm, f0_estimates);
+
+	return result;
 }
 
 template <typename T>
@@ -181,3 +193,19 @@ pitch::pyin<double>(const std::vector<double> &audio_buffer, int sample_rate);
 
 template float
 pitch::pyin<float>(const std::vector<float> &audio_buffer, int sample_rate);
+
+template std::pair<double, bool>
+pitch_alloc::Yin<double>::probabilistic_pitch<true>(
+    const std::vector<double> &audio_buffer, int sample_rate);
+
+template double
+pitch_alloc::Yin<double>::probabilistic_pitch<false>(
+    const std::vector<double> &audio_buffer, int sample_rate);
+
+template std::pair<float, bool>
+pitch_alloc::Yin<float>::probabilistic_pitch<true>(
+    const std::vector<float> &audio_buffer, int sample_rate);
+
+template float
+pitch_alloc::Yin<float>::probabilistic_pitch<false>(
+    const std::vector<float> &audio_buffer, int sample_rate);

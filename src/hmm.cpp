@@ -3,6 +3,8 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <mlpack/core.hpp>
@@ -18,10 +20,10 @@
 #define YIN_TRUST 0.5
 
 #define TRANSITION_WIDTH 13
-#define SELF_TRANS 0.99
+#define SELF_TRANS 0.999
 
 std::vector<double> PITCH_BINS(N_BINS);
-std::vector<double> REAL_PITCHES(N_BINS);
+std::vector<double> REAL_PITCHES(N_BINS * 2);
 
 const double A = std::pow(2.0, 1.0 / 12.0);
 
@@ -54,19 +56,16 @@ detail::bin_pitches(const std::vector<std::pair<T, T>> pitch_candidates)
 				pitch_probs[i - 1] = pitch_candidate.second;
 				prob_pitched += pitch_probs[i - 1];
 				REAL_PITCHES[i - 1] = pitch_candidate.first;
+				REAL_PITCHES[i - 1 + N_BINS] = pitch_candidate.first;
 				break;
 			}
 			prev_delta = delta;
 		}
 	}
 
-	T prob_really_pitched = YIN_TRUST * prob_pitched;
-
 	for (int i = 0; i < N_BINS; ++i) {
-		if (prob_pitched > 0) {
-			pitch_probs[i] *= prob_really_pitched / prob_pitched;
-		}
-		pitch_probs[i + N_BINS] = (1 - prob_really_pitched) / N_BINS;
+		pitch_probs[i] *= 0.5;
+		pitch_probs[i + N_BINS] = (1 - prob_pitched) * 0.5 / N_BINS;
 	}
 
 	for (size_t i = 0; i < pitch_probs.size(); ++i) {
@@ -134,14 +133,17 @@ detail::build_hmm()
 	return hmm;
 }
 
-template <typename T>
-T
+template <typename T, bool check_voiced>
+std::conditional_t<check_voiced, std::pair<T, bool>, T>
 util::pitch_from_hmm(
     mlpack::HMM<mlpack::DiscreteDistribution<>> hmm,
     const std::vector<std::pair<T, T>> pitch_candidates)
 {
 	if (pitch_candidates.size() == 0) {
-		return -1.0;
+		if constexpr (check_voiced)
+			return std::make_pair(-1.0, false);
+		else
+			return -1.0;
 	}
 
 	std::vector<T> observation_;
@@ -151,7 +153,10 @@ util::pitch_from_hmm(
 	}
 
 	if (observation_.size() == 0) {
-		return -1.0;
+		if constexpr (check_voiced)
+			return std::make_pair(-1.0, false);
+		else
+			return -1.0;
 	}
 
 	arma::mat observation(1, observation_.size());
@@ -180,7 +185,10 @@ util::pitch_from_hmm(
 		}
 	}
 
-	return REAL_PITCHES[most_frequent];
+	if constexpr (check_voiced) 
+		return std::make_pair(REAL_PITCHES[most_frequent], most_frequent < N_BINS);
+	else
+		return REAL_PITCHES[most_frequent];
 }
 
 template double
@@ -190,5 +198,15 @@ util::pitch_from_hmm<double>(
 
 template float
 util::pitch_from_hmm<float>(
+    mlpack::HMM<mlpack::DiscreteDistribution<>> hmm,
+    const std::vector<std::pair<float, float>> pitch_candidates);
+
+template std::pair<double, bool>
+util::pitch_from_hmm<double, true>(
+    mlpack::HMM<mlpack::DiscreteDistribution<>> hmm,
+    const std::vector<std::pair<double, double>> pitch_candidates);
+
+template std::pair<float, bool>
+util::pitch_from_hmm<float, true>(
     mlpack::HMM<mlpack::DiscreteDistribution<>> hmm,
     const std::vector<std::pair<float, float>> pitch_candidates);

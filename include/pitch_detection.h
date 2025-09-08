@@ -6,6 +6,8 @@
 #include <mlpack/core.hpp>
 #include <mlpack/methods/hmm/hmm.hpp>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 /* ignore me plz */
@@ -167,7 +169,8 @@ template <typename T> class Yin : public BaseAlloc
 	T
 	pitch(const std::vector<T> &, int);
 
-	T
+	template<bool check_voiced=false>
+	std::conditional_t<check_voiced, std::pair<T, bool>, T>
 	probabilistic_pitch(const std::vector<T> &, int);
 };
 } // namespace pitch_alloc
@@ -182,8 +185,8 @@ template <typename T>
 void
 acorr_r(const std::vector<T> &, pitch_alloc::BaseAlloc *);
 
-template <typename T>
-T
+template <typename T, bool check_voiced=false>
+std::conditional_t<check_voiced, std::pair<T, bool>, T>
 pitch_from_hmm(mlpack::HMM<mlpack::DiscreteDistribution<>>,
     const std::vector<std::pair<T, T>>);
 } // namespace util
